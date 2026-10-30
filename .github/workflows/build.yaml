@@ -1,0 +1,156 @@
+name: Wails build
+
+on:
+  release:
+    types: [created]
+  workflow_dispatch:
+
+env:
+  NODE_OPTIONS: "--max-old-space-size=4096"
+  APP_NAME: "ZK-King"
+  GO_VERSION: "1.25"
+  NODE_VERSION: "22.x"
+
+jobs:
+  build-windows:
+    runs-on: windows-latest # amd64/x64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install 7-Zip
+        run: choco install 7zip
+
+      - name: GoLang
+        uses: actions/setup-go@v5
+        with:
+          check-latest: true
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build & Compress
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          wails build -platform windows/amd64 -webview2 download -o ${{ env.APP_NAME }}.exe
+          copy README.md build\bin\
+          & "C:\Program Files\7-Zip\7z.exe" a -t7z "${{ env.APP_NAME }}-${{ github.ref_name }}-windows-x64.7z" ".\build\bin\*" -r
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.7z"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Workflow Artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-windows-x64
+          path: "*.7z"
+
+  build-macos:
+    runs-on: macos-latest # Apple Silicon；需要 amd64 可换 macos-13
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: GoLang
+        uses: actions/setup-go@v5
+        with:
+          check-latest: true
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build & Package DMG
+        shell: bash
+        run: |
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          wails build -platform darwin/universal -o ${{ env.APP_NAME }}
+          mkdir -p _build/ _dist/
+          cp -r ./build/bin/${{ env.APP_NAME }}.app _build/
+          brew install create-dmg
+          create-dmg \
+            --no-internet-enable \
+            --volname "${{ env.APP_NAME }}" \
+            --window-pos 400 400 \
+            --window-size 660 450 \
+            --icon "${{ env.APP_NAME }}.app" 180 180 \
+            --icon-size 100 \
+            --hide-extension "${{ env.APP_NAME }}.app" \
+            --app-drop-link 480 180 \
+            "_dist/${{ env.APP_NAME }}-${{ github.ref_name }}-macos-universal.dmg" \
+            "_build/"
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "_dist/*.dmg"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Workflow Artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-macos-universal
+          path: "_dist/*.dmg"
+
+  build-linux:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: GoLang
+        uses: actions/setup-go@v5
+        with:
+          check-latest: true
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: NodeJS
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build & Compress
+        run: |
+          ARCH=$(uname -m)
+          sudo apt-get update && sudo apt-get install -y libgtk-3-dev libwebkit2gtk-4.0-dev build-essential
+          go install github.com/wailsapp/wails/v2/cmd/wails@latest
+          wails build -webview2 download -o ${{ env.APP_NAME }}
+          mkdir _temp_dist
+          cp README.md _temp_dist/
+          cp -r build/bin/* _temp_dist/
+          chmod +x _temp_dist/*
+          cd _temp_dist/
+          tar -zcvf ${{ env.APP_NAME }}-${{ github.ref_name }}-linux-$ARCH.tar.gz *
+          mv ${{ env.APP_NAME }}-${{ github.ref_name }}-linux-$ARCH.tar.gz ..
+
+      - name: Upload Release Asset
+        if: github.event_name == 'release'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: "*.tar.gz"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload Workflow Artifact
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.APP_NAME }}-linux-x64
+          path: "*.tar.gz"

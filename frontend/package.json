@@ -1,0 +1,21 @@
+{
+  "name": "zk-king-frontend",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build"
+  },
+  "dependencies": {
+    "vue": "3.5.8"
+  },
+  "devDependencies": {
+    "@vicons/material": "0.12.0",
+    "@vitejs/plugin-vue": "6.0.1",
+    "naive-ui": "2.39.0",
+    "vite": "7.1.5"
+  },
+  "allowScripts": {
+    "esbuild@0.25.12": true
+  }
+}
